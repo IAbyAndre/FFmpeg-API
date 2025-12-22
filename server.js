@@ -34,6 +34,7 @@ const authenticateApiKey = (req, res, next) => {
     
     // Debug logging (remove in production if sensitive)
     console.log(`[Auth] Received Key: ${apiKey ? '***' + apiKey.slice(-4) : 'None'} | Expected: ${API_KEY ? '***' + API_KEY.slice(-4) : 'None'}`);
+    console.log(`[Auth] Full Env Check - FFMPEG_APIKEY: ${!!process.env.FFMPEG_APIKEY}, API_KEY: ${!!process.env.API_KEY}`);
 
     if (!API_KEY) {
         console.error('[Auth] Server API Key is not configured!');
