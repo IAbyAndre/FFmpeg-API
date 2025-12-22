@@ -49,6 +49,16 @@
 <div class="container">
     <h1>FFmpeg Form Builder</h1>
 
+    <!-- API Key Section -->
+    <div class="card" style="border-left: 5px solid #ffc107;">
+        <div class="section-title">Authentication</div>
+        <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="Enter your API Key" onchange="saveApiKey()">
+            <small style="color: #666;">Required for all operations.</small>
+        </div>
+    </div>
+
     <!-- Upload Section -->
     <div class="card">
         <div class="section-title">1. Upload New Videos</div>
@@ -195,6 +205,10 @@
 
     // Initialize Choices.js
     document.addEventListener('DOMContentLoaded', () => {
+        // Load API Key
+        const savedKey = localStorage.getItem('ffmpeg_api_key');
+        if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+
         const element = document.getElementById('videoSelect');
         videoChoices = new Choices(element, {
             removeItemButton: true,
@@ -206,9 +220,24 @@
         loadLibrary();
     });
 
+    function saveApiKey() {
+        const key = document.getElementById('apiKeyInput').value;
+        localStorage.setItem('ffmpeg_api_key', key);
+        loadVideos(); // Reload with new key
+        loadLibrary();
+    }
+
+    function getHeaders() {
+        const key = document.getElementById('apiKeyInput').value;
+        return {
+            'x-api-key': key
+        };
+    }
+
     async function loadVideos() {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/videos`);
+            const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
+            if (res.status === 401) return console.warn('Unauthorized: Check API Key');
             const files = await res.json();
             
             const choices = files.map(file => ({
@@ -225,7 +254,11 @@
 
     async function loadLibrary() {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/videos`);
+            const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
+            if (res.status === 401) {
+                document.getElementById('libraryList').innerHTML = '<li class="empty-library" style="color:orange">Please enter a valid API Key</li>';
+                return;
+            }
             const files = await res.json();
             const list = document.getElementById('libraryList');
             list.innerHTML = '';
@@ -257,7 +290,10 @@
         if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/videos/${filename}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE_URL}/api/videos/${filename}`, { 
+                method: 'DELETE',
+                headers: getHeaders()
+            });
             const data = await res.json();
             
             if (data.success) {
@@ -284,7 +320,11 @@
         for (let file of input.files) {
             const formData = new FormData();
             formData.append('video', file);
-            await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
+            await fetch(`${API_BASE_URL}/api/upload`, { 
+                method: 'POST', 
+                body: formData,
+                headers: getHeaders()
+            });
         }
         
         status.innerText = 'Upload complete!';
@@ -341,7 +381,10 @@
         
         const stitchRes = await fetch(`${API_BASE_URL}/api/stitch`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                ...getHeaders()
+            },
             body: JSON.stringify(stitchPayload) // We handle mute in step 2
         });
         const stitchData = await stitchRes.json();
@@ -397,7 +440,8 @@
 
         const res = await fetch(`${API_BASE_URL}/api/custom`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: getHeaders()
         });
         const data = await res.json();
         addResultJson(data, 'View Response (Custom)');

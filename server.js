@@ -8,16 +8,27 @@ const fs = require('fs');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+require('dotenv').config();
 
 // Set ffmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+const API_KEY = process.env.API_KEY;
 
 // Enable CORS for all routes
 app.use(cors());
+
+// Authentication Middleware
+const authenticateApiKey = (req, res, next) => {
+    const apiKey = req.header('x-api-key');
+    if (!apiKey || apiKey !== API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+    }
+    next();
+};
 
 // Swagger Configuration
 const swaggerOptions = {
@@ -28,6 +39,16 @@ const swaggerOptions = {
             version: '1.0.0',
             description: 'API for uploading, processing, stitching, and converting videos using FFmpeg',
         },
+        components: {
+            securitySchemes: {
+                ApiKeyAuth: {
+                    type: 'apiKey',
+                    in: 'header',
+                    name: 'x-api-key'
+                }
+            }
+        },
+        security: [{ ApiKeyAuth: [] }],
         servers: [
             {
                 url: 'https://video.andre-ia.fr',
@@ -44,6 +65,9 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+// Apply authentication to all API routes
+app.use('/api', authenticateApiKey);
 
 // Ensure directories exist
 const uploadDir = path.join(__dirname, 'uploads');
