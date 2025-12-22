@@ -5,6 +5,7 @@ const ffprobePath = require('ffprobe-static').path;
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 // Set ffmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -12,6 +13,9 @@ ffmpeg.setFfprobePath(ffprobePath);
 
 const app = express();
 const PORT = 3000;
+
+// Enable CORS for all routes
+app.use(cors());
 
 // Ensure directories exist
 const uploadDir = path.join(__dirname, 'uploads');

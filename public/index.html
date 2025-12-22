@@ -167,6 +167,10 @@
 <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 
 <script>
+    // Configuration: Set this to your production URL if running locally
+    // If running on the same server, you can leave it empty or use window.location.origin
+    const API_BASE_URL = 'https://video.andre-ia.fr'; 
+    
     let videoChoices;
 
     // Initialize Choices.js
@@ -183,7 +187,7 @@
 
     async function loadVideos() {
         try {
-            const res = await fetch('/api/videos');
+            const res = await fetch(`${API_BASE_URL}/api/videos`);
             const files = await res.json();
             
             const choices = files.map(file => ({
@@ -209,7 +213,7 @@
         for (let file of input.files) {
             const formData = new FormData();
             formData.append('video', file);
-            await fetch('/api/upload', { method: 'POST', body: formData });
+            await fetch(`${API_BASE_URL}/api/upload`, { method: 'POST', body: formData });
         }
         
         status.innerText = 'Upload complete!';
@@ -263,7 +267,7 @@
         };
         addResultJson(stitchPayload, 'View Request Payload (Stitch)');
         
-        const stitchRes = await fetch('/api/stitch', {
+        const stitchRes = await fetch(`${API_BASE_URL}/api/stitch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(stitchPayload) // We handle mute in step 2
@@ -319,7 +323,7 @@
         });
         addResultJson(requestLog, 'View Request Payload (Custom)');
 
-        const res = await fetch('/api/custom', {
+        const res = await fetch(`${API_BASE_URL}/api/custom`, {
             method: 'POST',
             body: formData
         });
@@ -327,7 +331,10 @@
         addResultJson(data, 'View Response (Custom)');
         
         if (data.success) {
-            addResultLink(label, data.downloadUrl);
+            // Ensure download URL is absolute if needed, or just use what server returns
+            // If server returns relative path, prepend API_BASE_URL
+            const downloadUrl = data.downloadUrl.startsWith('http') ? data.downloadUrl : `${API_BASE_URL}${data.downloadUrl}`;
+            addResultLink(label, downloadUrl);
         } else {
             addResultLog(`Failed: ${data.error}`);
         }
