@@ -107,6 +107,13 @@ app.use(express.static('public'));
 app.use('/uploads', express.static('uploads')); // Serve uploads for preview
 app.use(express.json());
 
+// Helper to get full URL
+const getFullUrl = (req, path) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    return `${protocol}://${host}${path}`;
+};
+
 // API: Upload Video
 /**
  * @swagger
@@ -213,7 +220,7 @@ app.get('/api/videos', async (req, res) => {
                     .map(f => ({
                         filename: f,
                         type: type,
-                        url: `${urlPrefix}/${f}`
+                        url: getFullUrl(req, `${urlPrefix}/${f}`)
                     }));
             } catch (e) {
                 return [];
@@ -356,7 +363,7 @@ app.post('/api/convert', (req, res) => {
         .toFormat(format)
         .on('end', () => {
             console.log('Conversion finished');
-            res.json({ success: true, url: `/processed/${outputFilename}` });
+            res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -602,7 +609,7 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
         .on('end', () => {
             console.log('Stitching finished');
             if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio file
-            res.json({ success: true, url: `/processed/${outputFilename}` });
+            res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Stitch error:', err);
@@ -712,7 +719,7 @@ app.post('/api/speed', (req, res) => {
     command
         .on('end', () => {
             console.log('Speed change finished');
-            res.json({ success: true, url: `/processed/${outputFilename}` });
+            res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -782,7 +789,7 @@ app.post('/api/mute', (req, res) => {
         .noAudio()
         .on('end', () => {
             console.log('Mute finished');
-            res.json({ success: true, url: `/processed/${outputFilename}` });
+            res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -872,7 +879,7 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
             console.log('Audio addition finished');
             // Clean up uploaded audio file
             fs.unlink(audioPath, () => {}); 
-            res.json({ success: true, url: `/processed/${outputFilename}` });
+            res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -1139,7 +1146,7 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
             .on('end', () => {
                 console.log('Custom command finished');
                 if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio
-                res.json({ success: true, url: `/processed/${outputFilename}`, filename: outputFilename });
+                res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`), filename: outputFilename });
             })
             .on('error', (err) => {
                 console.error('Custom command error:', err);
