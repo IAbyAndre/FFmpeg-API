@@ -52,6 +52,21 @@ app.get('/api/videos', (req, res) => {
     });
 });
 
+// API: Delete Video
+app.delete('/api/videos/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(uploadDir, filename);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    fs.unlink(filePath, (err) => {
+        if (err) return res.status(500).json({ error: 'Failed to delete file' });
+        res.json({ success: true, message: 'File deleted successfully' });
+    });
+});
+
 // API: Convert Video
 app.post('/api/convert', (req, res) => {
     const { filename, format } = req.body;
