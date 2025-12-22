@@ -19,11 +19,26 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.FFMPEG_APIKEY;
 
 // Enable CORS for all routes
-app.use(cors());
+app.use(cors({
+    allowedHeaders: ['Content-Type', 'ffmpeg-apikey', 'x-api-key'],
+    origin: '*'
+}));
 
 // Authentication Middleware
 const authenticateApiKey = (req, res, next) => {
+    // Skip auth for OPTIONS requests (preflight)
+    if (req.method === 'OPTIONS') return next();
+
     const apiKey = req.header('ffmpeg-apikey');
+    
+    // Debug logging (remove in production if sensitive)
+    console.log(`[Auth] Received Key: ${apiKey ? '***' + apiKey.slice(-4) : 'None'} | Expected: ${API_KEY ? '***' + API_KEY.slice(-4) : 'None'}`);
+
+    if (!API_KEY) {
+        console.error('[Auth] Server API Key is not configured!');
+        return res.status(500).json({ error: 'Server misconfiguration: API Key not set' });
+    }
+
     if (!apiKey || apiKey !== API_KEY) {
         return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
     }
