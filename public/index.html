@@ -402,9 +402,9 @@
         if (!stitchData.success) throw new Error(stitchData.error);
 
         // Step 2: Apply Transforms (Speed, Mute, Format)
-        // The stitch API returns a downloadUrl like /processed/filename.mp4
+        // The stitch API returns a url like /processed/filename.mp4
         // We need the filename to pass to /api/custom
-        const stitchedFilename = stitchData.downloadUrl.split('/').pop();
+        const stitchedFilename = stitchData.url.split('/').pop();
         
         addResultLog('Applying settings to stitched video...');
         await runCustomTransform(stitchedFilename, settings, 'Final Stitched Video');
@@ -459,7 +459,7 @@
         if (data.success) {
             // Ensure download URL is absolute if needed, or just use what server returns
             // If server returns relative path, prepend API_BASE_URL
-            const downloadUrl = data.downloadUrl.startsWith('http') ? data.downloadUrl : `${API_BASE_URL}${data.downloadUrl}`;
+            const downloadUrl = data.url.startsWith('http') ? data.url : `${API_BASE_URL}${data.url}`;
             addResultLink(label, downloadUrl);
         } else {
             addResultLog(`Failed: ${data.error}`);

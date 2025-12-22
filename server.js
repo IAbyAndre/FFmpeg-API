@@ -300,21 +300,17 @@ app.delete('/api/videos/:filename', (req, res) => {
  *     description: |
  *       Convert a video file to a specified format (mp4, mov, avi, mp3, gif).
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
- *       const response = await fetch('https://video.andre-ia.fr/api/convert', {
- *         method: 'POST',
- *         headers: {
- *           'Content-Type': 'application/json',
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: JSON.stringify({
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/convert',
+ *         {
  *           filename: '1234567890-video.mp4',
  *           format: 'gif'
- *         })
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *         }
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -339,7 +335,7 @@ app.delete('/api/videos/:filename', (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *       404:
  *         description: File not found
@@ -360,7 +356,7 @@ app.post('/api/convert', (req, res) => {
         .toFormat(format)
         .on('end', () => {
             console.log('Conversion finished');
-            res.json({ success: true, downloadUrl: `/processed/${outputFilename}` });
+            res.json({ success: true, url: `/processed/${outputFilename}` });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -423,23 +419,19 @@ app.get('/api/info/:filename', (req, res) => {
  *     description: |
  *       Combine multiple video files into a single video.
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
- *       const response = await fetch('https://video.andre-ia.fr/api/stitch', {
- *         method: 'POST',
- *         headers: {
- *           'Content-Type': 'application/json',
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: JSON.stringify({
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/stitch',
+ *         {
  *           videos: ['video1.mp4', 'video2.mp4'],
  *           mute: false,
  *           resolution: '1280:720',
  *           resizeMode: 'fit'
- *         })
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *         }
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -476,7 +468,7 @@ app.get('/api/info/:filename', (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *       400:
  *         description: Invalid input
@@ -584,7 +576,7 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
         .on('end', () => {
             console.log('Stitching finished');
             if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio file
-            res.json({ success: true, downloadUrl: `/processed/${outputFilename}` });
+            res.json({ success: true, url: `/processed/${outputFilename}` });
         })
         .on('error', (err) => {
             console.error('Stitch error:', err);
@@ -603,21 +595,17 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
  *     description: |
  *       Change the playback speed of a video.
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
- *       const response = await fetch('https://video.andre-ia.fr/api/speed', {
- *         method: 'POST',
- *         headers: {
- *           'Content-Type': 'application/json',
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: JSON.stringify({
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/speed',
+ *         {
  *           filename: '1234567890-video.mp4',
  *           speed: 1.5
- *         })
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *         }
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -642,7 +630,7 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *       400:
  *         description: Invalid speed value
@@ -698,7 +686,7 @@ app.post('/api/speed', (req, res) => {
     command
         .on('end', () => {
             console.log('Speed change finished');
-            res.json({ success: true, downloadUrl: `/processed/${outputFilename}` });
+            res.json({ success: true, url: `/processed/${outputFilename}` });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -716,20 +704,16 @@ app.post('/api/speed', (req, res) => {
  *     description: |
  *       Remove the audio track from a video.
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
- *       const response = await fetch('https://video.andre-ia.fr/api/mute', {
- *         method: 'POST',
- *         headers: {
- *           'Content-Type': 'application/json',
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: JSON.stringify({
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/mute',
+ *         {
  *           filename: '1234567890-video.mp4'
- *         })
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *         }
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -751,7 +735,7 @@ app.post('/api/speed', (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *       404:
  *         description: File not found
@@ -772,7 +756,7 @@ app.post('/api/mute', (req, res) => {
         .noAudio()
         .on('end', () => {
             console.log('Mute finished');
-            res.json({ success: true, downloadUrl: `/processed/${outputFilename}` });
+            res.json({ success: true, url: `/processed/${outputFilename}` });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -790,21 +774,18 @@ app.post('/api/mute', (req, res) => {
  *     description: |
  *       Replace the audio of a video with a custom audio file.
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
  *       const formData = new FormData();
  *       formData.append('videoFilename', '1234567890-video.mp4');
  *       formData.append('audio', audioFileInput.files[0]);
  *       
- *       const response = await fetch('https://video.andre-ia.fr/api/add-audio', {
- *         method: 'POST',
- *         headers: {
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: formData
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/add-audio',
+ *         formData
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -829,7 +810,7 @@ app.post('/api/mute', (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *       400:
  *         description: Missing file or filename
@@ -865,7 +846,7 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
             console.log('Audio addition finished');
             // Clean up uploaded audio file
             fs.unlink(audioPath, () => {}); 
-            res.json({ success: true, downloadUrl: `/processed/${outputFilename}` });
+            res.json({ success: true, url: `/processed/${outputFilename}` });
         })
         .on('error', (err) => {
             console.error('Error:', err);
@@ -883,7 +864,7 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
  *     description: |
  *       Execute complex FFmpeg operations including filters, resizing, and audio manipulation.
  *       
- *       ### JavaScript Fetch Example
+ *       ### Client Helper Example
  *       ```javascript
  *       const formData = new FormData();
  *       formData.append('filename', '1234567890-video.mp4');
@@ -893,15 +874,12 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
  *       formData.append('speed', '1.0');
  *       formData.append('volume', '1.0');
  *       
- *       const response = await fetch('https://video.andre-ia.fr/api/custom', {
- *         method: 'POST',
- *         headers: {
- *           'ffmpeg-apikey': 'YOUR_API_KEY'
- *         },
- *         body: formData
- *       });
- *       const data = await response.json();
- *       console.log(data);
+ *       const result = await runFfmpeg(
+ *         'YOUR_API_KEY',
+ *         'https://video.andre-ia.fr/api/custom',
+ *         formData
+ *       );
+ *       console.log(result); // Returns the URL string
  *       ```
  *     tags: [Processing]
  *     requestBody:
@@ -960,7 +938,7 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                 downloadUrl:
+ *                 url:
  *                   type: string
  *                 filename:
  *                   type: string
@@ -1135,7 +1113,7 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
             .on('end', () => {
                 console.log('Custom command finished');
                 if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio
-                res.json({ success: true, downloadUrl: `/processed/${outputFilename}`, filename: outputFilename });
+                res.json({ success: true, url: `/processed/${outputFilename}`, filename: outputFilename });
             })
             .on('error', (err) => {
                 console.error('Custom command error:', err);
