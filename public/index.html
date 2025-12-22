@@ -237,7 +237,14 @@
     async function loadVideos() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
-            if (res.status === 401) return console.warn('Unauthorized: Check API Key');
+            
+            if (!res.ok) {
+                const errData = await res.json();
+                console.error('Server Error:', errData);
+                if (res.status === 401) return alert('Unauthorized: Please check your API Key.');
+                return alert(`Server Error (${res.status}): ${errData.error || 'Unknown error'}`);
+            }
+
             const files = await res.json();
             
             const choices = files.map(file => ({
@@ -255,10 +262,13 @@
     async function loadLibrary() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
-            if (res.status === 401) {
-                document.getElementById('libraryList').innerHTML = '<li class="empty-library" style="color:orange">Please enter a valid API Key</li>';
+            
+            if (!res.ok) {
+                const errData = await res.json();
+                document.getElementById('libraryList').innerHTML = `<li class="empty-library" style="color:red">Error: ${errData.error || res.statusText}</li>`;
                 return;
             }
+
             const files = await res.json();
             const list = document.getElementById('libraryList');
             list.innerHTML = '';
