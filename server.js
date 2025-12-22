@@ -419,6 +419,16 @@ app.get('/api/info/:filename', (req, res) => {
  *     description: |
  *       Combine multiple video files into a single video.
  *       
+ *       ### JSON Payload Example
+ *       ```json
+ *       {
+ *         "videos": ["{{input-video1}}", "{{input-video2}}"],
+ *         "mute": false,
+ *         "resolution": "1280x720",
+ *         "resizeMode": "fit"
+ *       }
+ *       ```
+ *       
  *       ### Client Helper Example
  *       ```javascript
  *       const result = await runFfmpeg(
@@ -427,7 +437,7 @@ app.get('/api/info/:filename', (req, res) => {
  *         {
  *           videos: ['video1.mp4', 'video2.mp4'],
  *           mute: false,
- *           resolution: '1280:720',
+ *           resolution: '1280x720',
  *           resizeMode: 'fit'
  *         }
  *       );
@@ -437,6 +447,22 @@ app.get('/api/info/:filename', (req, res) => {
  *     requestBody:
  *       required: true
  *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               videos:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               mute:
+ *                 type: boolean
+ *               resolution:
+ *                 type: string
+ *                 example: "1280x720"
+ *               resizeMode:
+ *                 type: string
+ *                 enum: [fit, cover, stretch]
  *         multipart/form-data:
  *           schema:
  *             type: object
@@ -521,7 +547,7 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
     let targetH = 720;
     
     if (resolution && resolution !== 'original') {
-        const parts = resolution.split(':');
+        const parts = resolution.split(/[:x]/);
         if (parts.length === 2) {
             targetW = parseInt(parts[0]);
             targetH = parseInt(parts[1]);
@@ -975,7 +1001,7 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
 
         // Handle Resolution & Resize Mode
         if (resolution && resolution !== 'original') {
-            const parts = resolution.split(':');
+            const parts = resolution.split(/[:x]/);
             if (parts.length === 2) {
                 const targetW = parseInt(parts[0]);
                 const targetH = parseInt(parts[1]);
