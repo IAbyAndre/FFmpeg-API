@@ -23,7 +23,7 @@ app.use(cors());
 
 // Authentication Middleware
 const authenticateApiKey = (req, res, next) => {
-    const apiKey = req.header('x-api-key');
+    const apiKey = req.header('ffmpeg-apikey');
     if (!apiKey || apiKey !== API_KEY) {
         return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
     }
@@ -44,7 +44,7 @@ const swaggerOptions = {
                 ApiKeyAuth: {
                     type: 'apiKey',
                     in: 'header',
-                    name: 'x-api-key'
+                    name: 'ffmpeg-apikey'
                 }
             }
         },
