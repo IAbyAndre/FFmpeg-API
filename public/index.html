@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg Form Builder</title>
+    <!-- Choices.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    <style>
+        :root { --primary: #4a90e2; --bg: #f5f7fa; --card: #ffffff; --text: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 2rem; color: var(--primary); }
+        
+        .card { background: var(--card); padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 2rem; }
+        .section-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
+        
+        .form-group { margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        input[type="text"], input[type="number"], select { width: 100%; padding: 0.8rem; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; box-sizing: border-box; }
+        
+        .row { display: flex; gap: 1rem; }
+        .col { flex: 1; }
+        
+        .toggle-group { display: flex; align-items: center; gap: 0.5rem; }
+        
+        button.primary { background: var(--primary); color: white; border: none; padding: 1rem 2rem; border-radius: 6px; font-size: 1.1rem; cursor: pointer; width: 100%; transition: background 0.2s; }
+        button.primary:hover { background: #357abd; }
+        
+        .results { margin-top: 2rem; }
+        .result-item { background: #eef2f7; padding: 1rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .result-item a { color: var(--primary); text-decoration: none; font-weight: bold; }
+        
+        /* Choices.js overrides */
+        .choices__inner { background-color: white; border-radius: 6px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>FFmpeg Form Builder</h1>
+
+    <!-- Upload Section -->
+    <div class="card">
+        <div class="section-title">1. Upload New Videos</div>
+        <div class="row">
+            <input type="file" id="fileInput" accept="video/*" multiple>
+            <button onclick="uploadFiles()" style="width: auto; padding: 0 2rem; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Upload</button>
+        </div>
+        <div id="uploadStatus" style="margin-top: 0.5rem; color: #666;"></div>
+    </div>
+
+    <!-- Builder Section -->
+    <div class="card">
+        <div class="section-title">2. Build Your Request</div>
+        
+        <!-- Video Selection -->
+        <div class="form-group">
+            <label>Select Videos</label>
+            <select id="videoSelect" multiple></select>
+            <small style="color: #666;">Select one or more videos to process.</small>
+        </div>
+
+        <!-- Operation Mode -->
+        <div class="form-group">
+            <label>Operation Mode</label>
+            <div class="toggle-group">
+                <input type="radio" name="mode" id="modeBatch" value="batch" checked onchange="toggleMode()">
+                <label for="modeBatch" style="margin:0; font-weight: normal;">Process Individually (Batch)</label>
+                
+                <input type="radio" name="mode" id="modeStitch" value="stitch" onchange="toggleMode()" style="margin-left: 1rem;">
+                <label for="modeStitch" style="margin:0; font-weight: normal;">Stitch Together (Merge)</label>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="row">
+            <div class="col">
+                <div class="form-group">
+                    <label>Speed (Multiplier)</label>
+                    <input type="number" id="settingSpeed" placeholder="1.0" step="0.1" min="0.1" max="10">
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-group">
+                    <label>Output Format</label>
+                    <select id="settingFormat">
+                        <option value="mp4">MP4</option>
+                        <option value="mp3">MP3 (Audio Only)</option>
+                        <option value="mov">MOV</option>
+                        <option value="avi">AVI</option>
+                        <option value="gif">GIF</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <div class="form-group">
+                    <label>Target Resolution</label>
+                    <select id="settingResolution">
+                        <option value="original">Original (No Resize)</option>
+                        <option value="1280:720">1280x720 (Landscape)</option>
+                        <option value="1920:1080">1920x1080 (Full HD)</option>
+                        <option value="1080:1920">1080x1920 (Portrait/TikTok)</option>
+                        <option value="1080:1080">1080x1080 (Square)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-group">
+                    <label>Resize Mode</label>
+                    <select id="settingResizeMode">
+                        <option value="contain">Fit (Add Black Bars)</option>
+                        <option value="cover">Fill (Smart Crop)</option>
+                        <option value="stretch">Stretch (Distort)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="toggle-group">
+                <input type="checkbox" id="settingMute">
+                <label for="settingMute" style="margin:0;">Mute Audio</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Custom Audio Track (Optional)</label>
+            <input type="file" id="settingAudio" accept="audio/*">
+            <small style="color: #666;">Will replace original audio. Loops if shorter than video.</small>
+        </div>
+
+        <div class="form-group" style="display: flex; gap: 1rem;">
+            <div style="flex: 1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <label style="margin:0;">Audio Volume</label>
+                    <span id="volumeDisplay" style="font-size:0.9em; color:#666;">100%</span>
+                </div>
+                <input type="range" id="settingVolume" min="0" max="2" step="0.01" value="1" style="width:100%;" oninput="document.getElementById('volumeDisplay').innerText = Math.round(this.value * 100) + '%'">
+            </div>
+            <div style="flex: 1;">
+                <label>Fade In (sec)</label>
+                <input type="number" id="settingFadeIn" step="0.5" value="0" min="0">
+            </div>
+            <div style="flex: 1;">
+                <label>Fade Out (sec)</label>
+                <input type="number" id="settingFadeOut" step="0.5" value="0" min="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Custom Video Filters (Optional)</label>
+            <input type="text" id="settingVFilters" placeholder="e.g. scale=1280:720, transpose=1">
+        </div>
+
+        <button class="primary" onclick="processRequest()">Run Process</button>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results" id="resultsArea"></div>
+</div>
+
+<!-- Choices.js Script -->
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+    let videoChoices;
+
+    // Initialize Choices.js
+    document.addEventListener('DOMContentLoaded', () => {
+        const element = document.getElementById('videoSelect');
+        videoChoices = new Choices(element, {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'Search and select videos...',
+            searchPlaceholderValue: 'Type to search...',
+        });
+        loadVideos();
+    });
+
+    async function loadVideos() {
+        try {
+            const res = await fetch('/api/videos');
+            const files = await res.json();
+            
+            const choices = files.map(file => ({
+                value: file,
+                label: file,
+                selected: false
+            }));
+            
+            videoChoices.setChoices(choices, 'value', 'label', true);
+        } catch (e) {
+            console.error('Failed to load videos', e);
+        }
+    }
+
+    async function uploadFiles() {
+        const input = document.getElementById('fileInput');
+        const status = document.getElementById('uploadStatus');
+        
+        if (input.files.length === 0) return alert('Select files first');
+
+        status.innerText = 'Uploading...';
+        
+        for (let file of input.files) {
+            const formData = new FormData();
+            formData.append('video', file);
+            await fetch('/api/upload', { method: 'POST', body: formData });
+        }
+        
+        status.innerText = 'Upload complete!';
+        input.value = '';
+        loadVideos(); // Refresh list
+    }
+
+    function toggleMode() {
+        const isStitch = document.getElementById('modeStitch').checked;
+        // Logic to show/hide specific fields if needed
+    }
+
+    async function processRequest() {
+        const selectedVideos = videoChoices.getValue(true); // Get array of values
+        if (!selectedVideos || selectedVideos.length === 0) return alert('Please select at least one video.');
+
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const speed = document.getElementById('settingSpeed').value;
+        const format = document.getElementById('settingFormat').value;
+        const mute = document.getElementById('settingMute').checked;
+        const vFilters = document.getElementById('settingVFilters').value;
+        const volume = document.getElementById('settingVolume').value;
+        const fadeIn = document.getElementById('settingFadeIn').value;
+        const fadeOut = document.getElementById('settingFadeOut').value;
+        const resolution = document.getElementById('settingResolution').value;
+        const resizeMode = document.getElementById('settingResizeMode').value;
+
+        const resultsArea = document.getElementById('resultsArea');
+        resultsArea.innerHTML = '<div style="text-align:center; color:#666;">Processing... please wait.</div>';
+
+        try {
+            if (mode === 'stitch') {
+                if (selectedVideos.length < 2) return alert('Stitching requires at least 2 videos.');
+                await runStitchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode });
+            } else {
+                await runBatchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode });
+            }
+        } catch (e) {
+            resultsArea.innerHTML = `<div style="color:red; text-align:center;">Error: ${e.message}</div>`;
+        }
+    }
+
+    async function runStitchPipeline(videos, settings) {
+        // Step 1: Stitch
+        addResultLog('Stitching videos...');
+        const stitchPayload = { 
+            videos, 
+            mute: false,
+            resolution: settings.resolution,
+            resizeMode: settings.resizeMode
+        };
+        addResultJson(stitchPayload, 'View Request Payload (Stitch)');
+        
+        const stitchRes = await fetch('/api/stitch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(stitchPayload) // We handle mute in step 2
+        });
+        const stitchData = await stitchRes.json();
+        addResultJson(stitchData, 'View Response (Stitch)');
+        if (!stitchData.success) throw new Error(stitchData.error);
+
+        // Step 2: Apply Transforms (Speed, Mute, Format)
+        // The stitch API returns a downloadUrl like /processed/filename.mp4
+        // We need the filename to pass to /api/custom
+        const stitchedFilename = stitchData.downloadUrl.split('/').pop();
+        
+        addResultLog('Applying settings to stitched video...');
+        await runCustomTransform(stitchedFilename, settings, 'Final Stitched Video');
+    }
+
+    async function runBatchPipeline(videos, settings) {
+        document.getElementById('resultsArea').innerHTML = ''; // Clear
+        for (const video of videos) {
+            addResultLog(`Processing ${video}...`);
+            await runCustomTransform(video, settings, `Result: ${video}`);
+        }
+    }
+
+    async function runCustomTransform(filename, settings, label) {
+        const formData = new FormData();
+        formData.append('filename', filename);
+        if (settings.format) formData.append('format', settings.format);
+        if (settings.speed) formData.append('speed', settings.speed);
+        if (settings.mute) formData.append('mute', settings.mute);
+        if (settings.vFilters) formData.append('videoFilters', settings.vFilters);
+        if (settings.volume) formData.append('volume', settings.volume);
+        if (settings.fadeIn) formData.append('fadeIn', settings.fadeIn);
+        if (settings.fadeOut) formData.append('fadeOut', settings.fadeOut);
+        if (settings.resolution) formData.append('resolution', settings.resolution);
+        if (settings.resizeMode) formData.append('resizeMode', settings.resizeMode);
+        
+        // Add custom audio file if present
+        const audioInput = document.getElementById('settingAudio');
+        if (audioInput.files.length > 0) {
+            formData.append('customAudio', audioInput.files[0]);
+        }
+
+        // Log the request payload (convert FormData to object for display)
+        const requestLog = {};
+        formData.forEach((value, key) => {
+            if (value instanceof File) {
+                requestLog[key] = `File: ${value.name} (${value.size} bytes)`;
+            } else {
+                requestLog[key] = value;
+            }
+        });
+        addResultJson(requestLog, 'View Request Payload (Custom)');
+
+        const res = await fetch('/api/custom', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        addResultJson(data, 'View Response (Custom)');
+        
+        if (data.success) {
+            addResultLink(label, data.downloadUrl);
+        } else {
+            addResultLog(`Failed: ${data.error}`);
+        }
+    }
+
+    function addResultJson(data, title = 'View JSON Response') {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.innerText = title;
+        summary.style.cursor = 'pointer';
+        summary.style.color = '#007bff';
+        summary.style.marginBottom = '5px';
+        
+        const pre = document.createElement('pre');
+        pre.style.background = '#f4f4f4';
+        pre.style.padding = '10px';
+        pre.style.fontSize = '12px';
+        pre.style.overflowX = 'auto';
+        pre.style.border = '1px solid #ddd';
+        pre.innerText = JSON.stringify(data, null, 2);
+        
+        details.appendChild(summary);
+        details.appendChild(pre);
+        document.getElementById('resultsArea').appendChild(details);
+    }
+
+    function addResultLog(text) {
+        const div = document.createElement('div');
+        div.style.padding = '0.5rem';
+        div.style.color = '#666';
+        div.innerText = text;
+        document.getElementById('resultsArea').appendChild(div);
+    }
+
+    function addResultLink(label, url) {
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        div.innerHTML = `
+            <span>${label}</span>
+            <a href="${url}" target="_blank" download>Download</a>
+        `;
+        document.getElementById('resultsArea').appendChild(div);
+    }
+</script>
+
+</body>
+</html>
