@@ -113,6 +113,24 @@ app.use(express.json());
  * /api/upload:
  *   post:
  *     summary: Upload a video file
+ *     description: |
+ *       Upload a video file to the server.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const formData = new FormData();
+ *       formData.append('video', fileInput.files[0]);
+ *       
+ *       const response = await fetch('https://video.andre-ia.fr/api/upload', {
+ *         method: 'POST',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: formData
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Videos]
  *     requestBody:
  *       required: true
@@ -150,6 +168,20 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
  * /api/videos:
  *   get:
  *     summary: List all uploaded and processed videos
+ *     description: |
+ *       Retrieve a list of all available video files (both uploaded and processed).
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const response = await fetch('https://video.andre-ia.fr/api/videos', {
+ *         method: 'GET',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         }
+ *       });
+ *       const files = await response.json();
+ *       console.log(files);
+ *       ```
  *     tags: [Videos]
  *     responses:
  *       200:
@@ -214,6 +246,21 @@ const findFilePath = (filename) => {
  * /api/videos/{filename}:
  *   delete:
  *     summary: Delete a video file (from uploads or processed)
+ *     description: |
+ *       Delete a specific video file by filename.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const filename = '1234567890-video.mp4';
+ *       const response = await fetch(`https://video.andre-ia.fr/api/videos/${filename}`, {
+ *         method: 'DELETE',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         }
+ *       });
+ *       const result = await response.json();
+ *       console.log(result);
+ *       ```
  *     tags: [Videos]
  *     parameters:
  *       - in: path
@@ -250,6 +297,25 @@ app.delete('/api/videos/:filename', (req, res) => {
  * /api/convert:
  *   post:
  *     summary: Convert a video to a different format
+ *     description: |
+ *       Convert a video file to a specified format (mp4, mov, avi, mp3, gif).
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const response = await fetch('https://video.andre-ia.fr/api/convert', {
+ *         method: 'POST',
+ *         headers: {
+ *           'Content-Type': 'application/json',
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: JSON.stringify({
+ *           filename: '1234567890-video.mp4',
+ *           format: 'gif'
+ *         })
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
@@ -309,6 +375,21 @@ app.post('/api/convert', (req, res) => {
  * /api/info/{filename}:
  *   get:
  *     summary: Get metadata information about a video
+ *     description: |
+ *       Retrieve technical metadata (resolution, duration, codec, etc.) for a video file.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const filename = '1234567890-video.mp4';
+ *       const response = await fetch(`https://video.andre-ia.fr/api/info/${filename}`, {
+ *         method: 'GET',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         }
+ *       });
+ *       const metadata = await response.json();
+ *       console.log(metadata);
+ *       ```
  *     tags: [Videos]
  *     parameters:
  *       - in: path
@@ -339,6 +420,27 @@ app.get('/api/info/:filename', (req, res) => {
  * /api/stitch:
  *   post:
  *     summary: Stitch multiple videos together
+ *     description: |
+ *       Combine multiple video files into a single video.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const response = await fetch('https://video.andre-ia.fr/api/stitch', {
+ *         method: 'POST',
+ *         headers: {
+ *           'Content-Type': 'application/json',
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: JSON.stringify({
+ *           videos: ['video1.mp4', 'video2.mp4'],
+ *           mute: false,
+ *           resolution: '1280:720',
+ *           resizeMode: 'fit'
+ *         })
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
@@ -498,6 +600,25 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
  * /api/speed:
  *   post:
  *     summary: Change the speed of a video
+ *     description: |
+ *       Change the playback speed of a video.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const response = await fetch('https://video.andre-ia.fr/api/speed', {
+ *         method: 'POST',
+ *         headers: {
+ *           'Content-Type': 'application/json',
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: JSON.stringify({
+ *           filename: '1234567890-video.mp4',
+ *           speed: 1.5
+ *         })
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
@@ -592,6 +713,24 @@ app.post('/api/speed', (req, res) => {
  * /api/mute:
  *   post:
  *     summary: Mute a video
+ *     description: |
+ *       Remove the audio track from a video.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const response = await fetch('https://video.andre-ia.fr/api/mute', {
+ *         method: 'POST',
+ *         headers: {
+ *           'Content-Type': 'application/json',
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: JSON.stringify({
+ *           filename: '1234567890-video.mp4'
+ *         })
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
@@ -648,6 +787,25 @@ app.post('/api/mute', (req, res) => {
  * /api/add-audio:
  *   post:
  *     summary: Add custom audio to a video
+ *     description: |
+ *       Replace the audio of a video with a custom audio file.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const formData = new FormData();
+ *       formData.append('videoFilename', '1234567890-video.mp4');
+ *       formData.append('audio', audioFileInput.files[0]);
+ *       
+ *       const response = await fetch('https://video.andre-ia.fr/api/add-audio', {
+ *         method: 'POST',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: formData
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
@@ -722,6 +880,29 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
  * /api/custom:
  *   post:
  *     summary: Execute custom FFmpeg operations
+ *     description: |
+ *       Execute complex FFmpeg operations including filters, resizing, and audio manipulation.
+ *       
+ *       ### JavaScript Fetch Example
+ *       ```javascript
+ *       const formData = new FormData();
+ *       formData.append('filename', '1234567890-video.mp4');
+ *       formData.append('format', 'mp4');
+ *       formData.append('resolution', '1280:720');
+ *       formData.append('resizeMode', 'cover');
+ *       formData.append('speed', '1.0');
+ *       formData.append('volume', '1.0');
+ *       
+ *       const response = await fetch('https://video.andre-ia.fr/api/custom', {
+ *         method: 'POST',
+ *         headers: {
+ *           'ffmpeg-apikey': 'YOUR_API_KEY'
+ *         },
+ *         body: formData
+ *       });
+ *       const data = await response.json();
+ *       console.log(data);
+ *       ```
  *     tags: [Processing]
  *     requestBody:
  *       required: true
