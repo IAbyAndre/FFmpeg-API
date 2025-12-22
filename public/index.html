@@ -240,7 +240,10 @@
                 li.className = 'library-item';
                 li.innerHTML = `
                     <span>${file}</span>
-                    <button class="btn-delete" onclick="deleteVideo('${file}')">Delete</button>
+                    <div>
+                        <a href="${API_BASE_URL}/uploads/${file}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
+                        <button class="btn-delete" onclick="deleteVideo('${file}')">Delete</button>
+                    </div>
                 `;
                 list.appendChild(li);
             });
