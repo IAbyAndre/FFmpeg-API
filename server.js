@@ -6,6 +6,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 // Set ffmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -16,6 +18,32 @@ const PORT = 3000;
 
 // Enable CORS for all routes
 app.use(cors());
+
+// Swagger Configuration
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'FFmpeg Video Processing API',
+            version: '1.0.0',
+            description: 'API for uploading, processing, stitching, and converting videos using FFmpeg',
+        },
+        servers: [
+            {
+                url: 'https://video.andre-ia.fr',
+                description: 'Production Server',
+            },
+            {
+                url: `http://localhost:${PORT}`,
+                description: 'Local Development Server',
+            },
+        ],
+    },
+    apis: ['./server.js'], // Path to the API docs
+};
+
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Ensure directories exist
 const uploadDir = path.join(__dirname, 'uploads');
@@ -39,12 +67,61 @@ app.use('/uploads', express.static('uploads')); // Serve uploads for preview
 app.use(express.json());
 
 // API: Upload Video
+/**
+ * @swagger
+ * /api/upload:
+ *   post:
+ *     summary: Upload a video file
+ *     tags: [Videos]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               video:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: File uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 filename:
+ *                   type: string
+ *                 originalName:
+ *                   type: string
+ *       400:
+ *         description: No file uploaded
+ */
 app.post('/api/upload', upload.single('video'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     res.json({ filename: req.file.filename, originalName: req.file.originalname });
 });
 
 // API: List Videos
+/**
+ * @swagger
+ * /api/videos:
+ *   get:
+ *     summary: List all uploaded videos
+ *     tags: [Videos]
+ *     responses:
+ *       200:
+ *         description: List of video filenames
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: string
+ *       500:
+ *         description: Server error
+ */
 app.get('/api/videos', (req, res) => {
     fs.readdir(uploadDir, (err, files) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -53,6 +130,27 @@ app.get('/api/videos', (req, res) => {
 });
 
 // API: Delete Video
+/**
+ * @swagger
+ * /api/videos/{filename}:
+ *   delete:
+ *     summary: Delete a video file
+ *     tags: [Videos]
+ *     parameters:
+ *       - in: path
+ *         name: filename
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The filename of the video to delete
+ *     responses:
+ *       200:
+ *         description: File deleted successfully
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Failed to delete file
+ */
 app.delete('/api/videos/:filename', (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(uploadDir, filename);
@@ -68,6 +166,41 @@ app.delete('/api/videos/:filename', (req, res) => {
 });
 
 // API: Convert Video
+/**
+ * @swagger
+ * /api/convert:
+ *   post:
+ *     summary: Convert a video to a different format
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               filename:
+ *                 type: string
+ *               format:
+ *                 type: string
+ *                 enum: [mp4, mov, avi, mp3, gif]
+ *     responses:
+ *       200:
+ *         description: Conversion successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Conversion failed
+ */
 app.post('/api/convert', (req, res) => {
     const { filename, format } = req.body;
     const inputPath = path.join(uploadDir, filename);
@@ -92,6 +225,25 @@ app.post('/api/convert', (req, res) => {
 });
 
 // API: Get Video Info
+/**
+ * @swagger
+ * /api/info/{filename}:
+ *   get:
+ *     summary: Get metadata information about a video
+ *     tags: [Videos]
+ *     parameters:
+ *       - in: path
+ *         name: filename
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: The filename of the video
+ *     responses:
+ *       200:
+ *         description: Video metadata
+ *       500:
+ *         description: Server error
+ */
 app.get('/api/info/:filename', (req, res) => {
     const inputPath = path.join(uploadDir, req.params.filename);
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
@@ -101,6 +253,53 @@ app.get('/api/info/:filename', (req, res) => {
 });
 
 // API: Stitch Videos
+/**
+ * @swagger
+ * /api/stitch:
+ *   post:
+ *     summary: Stitch multiple videos together
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               videos:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: List of filenames to stitch
+ *               customAudio:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional custom audio file
+ *               mute:
+ *                 type: boolean
+ *               resolution:
+ *                 type: string
+ *                 example: "1280:720"
+ *               resizeMode:
+ *                 type: string
+ *                 enum: [fit, cover, stretch]
+ *     responses:
+ *       200:
+ *         description: Stitching successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *       400:
+ *         description: Invalid input
+ *       500:
+ *         description: Stitching failed
+ */
 app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
     let { videos, mute, resolution, resizeMode } = req.body;
     
@@ -209,6 +408,43 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
 });
 
 // API: Change Video Speed
+/**
+ * @swagger
+ * /api/speed:
+ *   post:
+ *     summary: Change the speed of a video
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               filename:
+ *                 type: string
+ *               speed:
+ *                 type: number
+ *                 description: Speed multiplier (0.1 to 10)
+ *     responses:
+ *       200:
+ *         description: Speed change successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *       400:
+ *         description: Invalid speed value
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Speed change failed
+ */
 app.post('/api/speed', (req, res) => {
     const { filename, speed } = req.body;
     const speedFactor = parseFloat(speed);
@@ -266,6 +502,38 @@ app.post('/api/speed', (req, res) => {
 });
 
 // API: Mute Video
+/**
+ * @swagger
+ * /api/mute:
+ *   post:
+ *     summary: Mute a video
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               filename:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Mute successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Mute failed
+ */
 app.post('/api/mute', (req, res) => {
     const { filename } = req.body;
     const inputPath = path.join(uploadDir, filename);
@@ -290,6 +558,43 @@ app.post('/api/mute', (req, res) => {
 });
 
 // API: Add Custom Audio
+/**
+ * @swagger
+ * /api/add-audio:
+ *   post:
+ *     summary: Add custom audio to a video
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               videoFilename:
+ *                 type: string
+ *               audio:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Audio added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *       400:
+ *         description: Missing file or filename
+ *       404:
+ *         description: Video not found
+ *       500:
+ *         description: Failed to add audio
+ */
 app.post('/api/add-audio', upload.single('audio'), (req, res) => {
     const { videoFilename } = req.body;
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
@@ -327,6 +632,77 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
 });
 
 // API: Custom FFmpeg Command
+/**
+ * @swagger
+ * /api/custom:
+ *   post:
+ *     summary: Execute custom FFmpeg operations
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               filename:
+ *                 type: string
+ *                 description: Filename of the video to process
+ *               customAudio:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional custom audio file
+ *               format:
+ *                 type: string
+ *                 enum: [mp4, mov, avi, mp3, gif]
+ *               videoCodec:
+ *                 type: string
+ *               audioCodec:
+ *                 type: string
+ *               videoFilters:
+ *                 type: string
+ *                 description: Comma-separated list of video filters
+ *               audioFilters:
+ *                 type: string
+ *                 description: Comma-separated list of audio filters
+ *               speed:
+ *                 type: number
+ *               mute:
+ *                 type: boolean
+ *               volume:
+ *                 type: number
+ *                 description: Volume multiplier (e.g., 1.0, 0.5, 2.0)
+ *               fadeIn:
+ *                 type: number
+ *                 description: Fade in duration in seconds
+ *               fadeOut:
+ *                 type: number
+ *                 description: Fade out duration in seconds
+ *               resolution:
+ *                 type: string
+ *                 example: "1280:720"
+ *               resizeMode:
+ *                 type: string
+ *                 enum: [fit, cover, stretch]
+ *     responses:
+ *       200:
+ *         description: Processing successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 downloadUrl:
+ *                   type: string
+ *                 filename:
+ *                   type: string
+ *       404:
+ *         description: File not found
+ *       500:
+ *         description: Processing failed
+ */
 app.post('/api/custom', upload.single('customAudio'), (req, res) => {
     const { filename, format, videoCodec, audioCodec, videoFilters, audioFilters, speed, mute, volume, fadeIn, fadeOut, resolution, resizeMode } = req.body;
     
