@@ -16,7 +16,7 @@ ffmpeg.setFfprobePath(ffprobePath);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.API_KEY;
+const API_KEY = process.env.FFMPEG_APIKEY;
 
 // Enable CORS for all routes
 app.use(cors());
