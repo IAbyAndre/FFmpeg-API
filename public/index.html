@@ -248,8 +248,8 @@
             const files = await res.json();
             
             const choices = files.map(file => ({
-                value: file,
-                label: file,
+                value: file.filename,
+                label: file.filename + (file.type === 'processed' ? ' (Processed)' : ''),
                 selected: false
             }));
             
@@ -282,10 +282,10 @@
                 const li = document.createElement('li');
                 li.className = 'library-item';
                 li.innerHTML = `
-                    <span>${file}</span>
+                    <span>${file.filename} <small style="color:#999; font-size:0.8em">(${file.type})</small></span>
                     <div>
-                        <a href="${API_BASE_URL}/uploads/${file}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
-                        <button class="btn-delete" onclick="deleteVideo('${file}')">Delete</button>
+                        <a href="${API_BASE_URL}${file.url}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
+                        <button class="btn-delete" onclick="deleteVideo('${file.filename}')">Delete</button>
                     </div>
                 `;
                 list.appendChild(li);

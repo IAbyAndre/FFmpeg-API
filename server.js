@@ -149,33 +149,71 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
  * @swagger
  * /api/videos:
  *   get:
- *     summary: List all uploaded videos
+ *     summary: List all uploaded and processed videos
  *     tags: [Videos]
  *     responses:
  *       200:
- *         description: List of video filenames
+ *         description: List of video files with metadata
  *         content:
  *           application/json:
  *             schema:
  *               type: array
  *               items:
- *                 type: string
+ *                 type: object
+ *                 properties:
+ *                   filename:
+ *                     type: string
+ *                   type:
+ *                     type: string
+ *                     enum: [upload, processed]
+ *                   url:
+ *                     type: string
  *       500:
  *         description: Server error
  */
-app.get('/api/videos', (req, res) => {
-    fs.readdir(uploadDir, (err, files) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(files.filter(f => f !== '.DS_Store'));
-    });
+app.get('/api/videos', async (req, res) => {
+    try {
+        const getFiles = async (dir, type, urlPrefix) => {
+            try {
+                const files = await fs.promises.readdir(dir);
+                return files
+                    .filter(f => f !== '.DS_Store')
+                    .map(f => ({
+                        filename: f,
+                        type: type,
+                        url: `${urlPrefix}/${f}`
+                    }));
+            } catch (e) {
+                return [];
+            }
+        };
+
+        const uploads = await getFiles(uploadDir, 'upload', '/uploads');
+        const processed = await getFiles(processedDir, 'processed', '/processed');
+
+        res.json([...uploads, ...processed]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
+
+// Helper to find file in uploads or processed
+const findFilePath = (filename) => {
+    const uploadPath = path.join(uploadDir, filename);
+    if (fs.existsSync(uploadPath)) return uploadPath;
+    
+    const processedPath = path.join(processedDir, filename);
+    if (fs.existsSync(processedPath)) return processedPath;
+    
+    return null;
+};
 
 // API: Delete Video
 /**
  * @swagger
  * /api/videos/{filename}:
  *   delete:
- *     summary: Delete a video file
+ *     summary: Delete a video file (from uploads or processed)
  *     tags: [Videos]
  *     parameters:
  *       - in: path
@@ -194,9 +232,9 @@ app.get('/api/videos', (req, res) => {
  */
 app.delete('/api/videos/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = path.join(uploadDir, filename);
+    const filePath = findFilePath(filename);
 
-    if (!fs.existsSync(filePath)) {
+    if (!filePath) {
         return res.status(404).json({ error: 'File not found' });
     }
 
@@ -244,11 +282,11 @@ app.delete('/api/videos/:filename', (req, res) => {
  */
 app.post('/api/convert', (req, res) => {
     const { filename, format } = req.body;
-    const inputPath = path.join(uploadDir, filename);
+    const inputPath = findFilePath(filename);
     const outputFilename = `converted-${Date.now()}.${format}`;
     const outputPath = path.join(processedDir, outputFilename);
 
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'File not found' });
+    if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
     console.log(`Starting conversion: ${filename} -> ${format}`);
 
@@ -286,7 +324,9 @@ app.post('/api/convert', (req, res) => {
  *         description: Server error
  */
 app.get('/api/info/:filename', (req, res) => {
-    const inputPath = path.join(uploadDir, req.params.filename);
+    const inputPath = findFilePath(req.params.filename);
+    if (!inputPath) return res.status(404).json({ error: 'File not found' });
+
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(metadata.format);
@@ -361,10 +401,14 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
     const outputPath = path.join(processedDir, outputFilename);
     const command = ffmpeg();
 
-    // Add video inputs
-    videos.forEach(video => {
-        command.input(path.join(uploadDir, video));
-    });
+    // Validate and add video inputs
+    for (const video of videos) {
+        const videoPath = findFilePath(video);
+        if (!videoPath) {
+            return res.status(404).json({ error: `File not found: ${video}` });
+        }
+        command.input(videoPath);
+    }
 
     // Add custom audio input if present
     if (req.file) {
@@ -494,11 +538,11 @@ app.post('/api/speed', (req, res) => {
         return res.status(400).json({ error: 'Speed must be between 0.1 and 10' });
     }
 
-    const inputPath = path.join(uploadDir, filename);
+    const inputPath = findFilePath(filename);
     const outputFilename = `speed-${speedFactor}x-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
 
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'File not found' });
+    if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
     console.log(`Changing speed: ${filename} -> ${speedFactor}x`);
 
@@ -577,11 +621,11 @@ app.post('/api/speed', (req, res) => {
  */
 app.post('/api/mute', (req, res) => {
     const { filename } = req.body;
-    const inputPath = path.join(uploadDir, filename);
+    const inputPath = findFilePath(filename);
     const outputFilename = `muted-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
 
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'File not found' });
+    if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
     console.log(`Muting video: ${filename}`);
 
@@ -641,12 +685,12 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
     if (!videoFilename) return res.status(400).json({ error: 'No video filename provided' });
 
-    const videoPath = path.join(uploadDir, videoFilename);
+    const videoPath = findFilePath(videoFilename);
     const audioPath = req.file.path;
     const outputFilename = `custom-audio-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
 
-    if (!fs.existsSync(videoPath)) return res.status(404).json({ error: 'Video file not found' });
+    if (!videoPath) return res.status(404).json({ error: 'Video file not found' });
 
     console.log(`Adding audio to: ${videoFilename}`);
 
@@ -748,15 +792,12 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
     const { filename, format, videoCodec, audioCodec, videoFilters, audioFilters, speed, mute, volume, fadeIn, fadeOut, resolution, resizeMode } = req.body;
     
     // Check for file in uploads OR processed folder (for chained operations)
-    let inputPath = path.join(uploadDir, filename);
-    if (!fs.existsSync(inputPath)) {
-        inputPath = path.join(processedDir, filename);
-    }
+    const inputPath = findFilePath(filename);
 
     const outputFilename = `custom-${Date.now()}.${format || 'mp4'}`;
     const outputPath = path.join(processedDir, outputFilename);
 
-    if (!fs.existsSync(inputPath)) return res.status(404).json({ error: 'File not found' });
+    if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
     console.log(`Starting custom command for: ${filename} (Audio: ${!!req.file})`);
 
