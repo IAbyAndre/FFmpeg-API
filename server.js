@@ -186,8 +186,8 @@ const downloadFile = async (url, destPath) => {
  *       400:
  *         description: No file uploaded
  */
-app.post('/api/upload', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), (req, res) => {
-    const file = (req.files && req.files.video) ? req.files.video[0] : ((req.files && req.files.audio) ? req.files.audio[0] : null);
+app.post('/api/upload', upload.any(), (req, res) => {
+    const file = (req.files && req.files.length > 0) ? req.files[0] : null;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
     res.json({ filename: file.filename, originalName: file.originalname });
 });
