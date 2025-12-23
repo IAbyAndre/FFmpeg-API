@@ -323,6 +323,40 @@ const hasAudioStream = (filePath) => {
     });
 };
 
+// API: Bulk Delete Media
+/**
+ * @swagger
+ * /api/videos/bulk-delete:
+ *   post:
+ *     summary: Delete all uploaded and processed media files
+ *     tags: [Videos]
+ *     responses:
+ *       200:
+ *         description: All files deleted successfully
+ *       500:
+ *         description: Failed to delete some files
+ */
+app.post('/api/videos/bulk-delete', async (req, res) => {
+    try {
+        const deleteFiles = async (dir) => {
+            const files = await fs.promises.readdir(dir);
+            for (const file of files) {
+                if (file !== '.DS_Store') {
+                    await fs.promises.unlink(path.join(dir, file));
+                }
+            }
+        };
+
+        await deleteFiles(uploadDir);
+        await deleteFiles(processedDir);
+
+        res.json({ success: true, message: 'All media files deleted successfully' });
+    } catch (err) {
+        console.error('[Bulk Delete] Error:', err);
+        res.status(500).json({ error: 'Failed to delete all files: ' + err.message });
+    }
+});
+
 // API: Delete Video
 /**
  * @swagger
@@ -377,40 +411,6 @@ app.delete('/api/videos/:filename', (req, res) => {
         if (err) return res.status(500).json({ error: 'Failed to delete file' });
         res.json({ success: true, message: 'File deleted successfully' });
     });
-});
-
-// API: Bulk Delete Media
-/**
- * @swagger
- * /api/videos/bulk-delete:
- *   post:
- *     summary: Delete all uploaded and processed media files
- *     tags: [Videos]
- *     responses:
- *       200:
- *         description: All files deleted successfully
- *       500:
- *         description: Failed to delete some files
- */
-app.post('/api/videos/bulk-delete', async (req, res) => {
-    try {
-        const deleteFiles = async (dir) => {
-            const files = await fs.promises.readdir(dir);
-            for (const file of files) {
-                if (file !== '.DS_Store') {
-                    await fs.promises.unlink(path.join(dir, file));
-                }
-            }
-        };
-
-        await deleteFiles(uploadDir);
-        await deleteFiles(processedDir);
-
-        res.json({ success: true, message: 'All media files deleted successfully' });
-    } catch (err) {
-        console.error('[Bulk Delete] Error:', err);
-        res.status(500).json({ error: 'Failed to delete all files: ' + err.message });
-    }
 });
 
 // API: Convert Video

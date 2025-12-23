@@ -442,6 +442,12 @@
                 method: 'POST',
                 headers: getHeaders()
             });
+            
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(`Server error (${res.status}): ${text.slice(0, 100)}`);
+            }
+
             const data = await res.json();
             
             if (data.success) {
