@@ -229,9 +229,8 @@
 <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 
 <script>
-    // Configuration: Set this to your production URL if running locally
-    // If running on the same server, you can leave it empty or use window.location.origin
-    const API_BASE_URL = 'https://video.andre-ia.fr'; 
+    // Configuration: Use window.location.origin to work both locally and in production
+    const API_BASE_URL = window.location.origin; 
     
     let videoChoices;
     let externalUrls = [];

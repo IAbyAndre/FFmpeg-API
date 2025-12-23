@@ -337,12 +337,18 @@ const hasAudioStream = (filePath) => {
  *         description: Failed to delete some files
  */
 app.post('/api/bulk-delete-media', async (req, res) => {
+    console.log('[Bulk Delete] Request received');
     try {
         const deleteFiles = async (dir) => {
+            if (!fs.existsSync(dir)) return;
             const files = await fs.promises.readdir(dir);
             for (const file of files) {
                 if (file !== '.DS_Store') {
-                    await fs.promises.unlink(path.join(dir, file));
+                    try {
+                        await fs.promises.unlink(path.join(dir, file));
+                    } catch (unlinkErr) {
+                        console.warn(`[Bulk Delete] Could not delete ${file}:`, unlinkErr.message);
+                    }
                 }
             }
         };
