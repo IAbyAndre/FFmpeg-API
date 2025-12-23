@@ -330,12 +330,18 @@
             const audioSelect = document.getElementById('settingAudioUrl');
             const currentAudioValue = audioSelect.value;
             audioSelect.innerHTML = '<option value="">-- Select from Library --</option>';
+            
+            const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+            const isAudio = (filename) => audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+
             [...serverChoices, ...urlChoices].forEach(choice => {
-                const opt = document.createElement('option');
-                opt.value = choice.value;
-                opt.textContent = choice.label;
-                if (choice.value === currentAudioValue) opt.selected = true;
-                audioSelect.appendChild(opt);
+                if (isAudio(choice.value)) {
+                    const opt = document.createElement('option');
+                    opt.value = choice.value;
+                    opt.textContent = choice.label;
+                    if (choice.value === currentAudioValue) opt.selected = true;
+                    audioSelect.appendChild(opt);
+                }
             });
         } catch (e) {
             console.error('Failed to load videos', e);
