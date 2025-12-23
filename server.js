@@ -326,7 +326,7 @@ const hasAudioStream = (filePath) => {
 // API: Bulk Delete Media
 /**
  * @swagger
- * /api/videos/bulk-delete:
+ * /api/bulk-delete-media:
  *   post:
  *     summary: Delete all uploaded and processed media files
  *     tags: [Videos]
@@ -336,7 +336,7 @@ const hasAudioStream = (filePath) => {
  *       500:
  *         description: Failed to delete some files
  */
-app.post('/api/videos/bulk-delete', async (req, res) => {
+app.post('/api/bulk-delete-media', async (req, res) => {
     try {
         const deleteFiles = async (dir) => {
             const files = await fs.promises.readdir(dir);
