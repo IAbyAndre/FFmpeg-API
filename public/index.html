@@ -312,30 +312,39 @@
                 else console.warn(`Server Error (${res.status})`);
             }
 
+            const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.m4p', '.wma', '.mp2', '.amr'];
+            const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.m4v'];
+            
+            const isAudio = (filename) => audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+            const isVideo = (filename) => videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+
             const serverChoices = files.map(file => ({
                 value: file.filename,
                 label: file.filename + (file.type === 'processed' ? ' (Processed)' : ''),
-                selected: false
+                selected: false,
+                isAudio: isAudio(file.filename),
+                isVideo: isVideo(file.filename)
             }));
 
             const urlChoices = externalUrls.map(url => ({
                 value: url,
                 label: url + ' (External URL)',
-                selected: false
+                selected: false,
+                isAudio: isAudio(url),
+                isVideo: isVideo(url)
             }));
             
-            videoChoices.setChoices([...serverChoices, ...urlChoices], 'value', 'label', true);
+            // Filter videos for the main dropdown
+            const videoOnlyChoices = [...serverChoices, ...urlChoices].filter(c => c.isVideo || (!c.isAudio && !c.isVideo));
+            videoChoices.setChoices(videoOnlyChoices, 'value', 'label', true);
 
             // Populate Audio Dropdown
             const audioSelect = document.getElementById('settingAudioUrl');
             const currentAudioValue = audioSelect.value;
             audioSelect.innerHTML = '<option value="">-- Select from Library --</option>';
             
-            const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
-            const isAudio = (filename) => audioExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-
             [...serverChoices, ...urlChoices].forEach(choice => {
-                if (isAudio(choice.value)) {
+                if (choice.isAudio) {
                     const opt = document.createElement('option');
                     opt.value = choice.value;
                     opt.textContent = choice.label;
@@ -361,7 +370,7 @@
             list.innerHTML = '';
 
             if (files.length === 0 && externalUrls.length === 0) {
-                list.innerHTML = '<li class="empty-library">No files found. Upload some videos!</li>';
+                list.innerHTML = '<li class="empty-library">No files found. Upload some media!</li>';
                 return;
             }
 
@@ -432,7 +441,9 @@
         
         for (let file of input.files) {
             const formData = new FormData();
-            const fieldName = file.type.startsWith('audio/') ? 'audio' : 'video';
+            const audioExtensions = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.m4p', '.wma', '.mp2', '.amr'];
+            const isAudioExt = audioExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+            const fieldName = (file.type.startsWith('audio/') || isAudioExt) ? 'audio' : 'video';
             formData.append(fieldName, file);
             await fetch(`${API_BASE_URL}/api/upload`, { 
                 method: 'POST', 

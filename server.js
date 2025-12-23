@@ -91,9 +91,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 app.use('/api', authenticateApiKey);
 
 // Ensure directories exist
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = path.join(__dirname, 'public/uploads');
 const processedDir = path.join(__dirname, 'public/processed');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 if (!fs.existsSync(processedDir)) fs.mkdirSync(processedDir, { recursive: true });
 
 // Configure storage
@@ -108,7 +108,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads')); // Serve uploads for preview
+app.use('/uploads', express.static('public/uploads')); // Serve uploads for preview
 app.use(express.json());
 
 // Helper to get full URL
