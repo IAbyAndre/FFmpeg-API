@@ -8,6 +8,7 @@ const fs = require('fs');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const axios = require('axios');
 require('dotenv').config();
 
 // Set ffmpeg paths
@@ -112,6 +113,21 @@ const getFullUrl = (req, path) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.get('host');
     return `${protocol}://${host}${path}`;
+};
+
+// Helper to download external file
+const downloadFile = async (url, destPath) => {
+    const writer = fs.createWriteStream(destPath);
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream'
+    });
+    response.data.pipe(writer);
+    return new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+    });
 };
 
 // API: Upload Video
@@ -518,7 +534,7 @@ app.get('/api/info/:filename', (req, res) => {
  *       500:
  *         description: Stitching failed
  */
-app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
+app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
     let { videos, mute, resolution, resizeMode } = req.body;
     
     // Parse videos if sent as string (FormData)
@@ -537,13 +553,35 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
     const outputFilename = `stitched-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
     const command = ffmpeg();
+    const tempFiles = []; // Track for cleanup
 
     // Validate and add video inputs
     for (const video of videos) {
-        const videoPath = findFilePath(video);
+        let videoPath = findFilePath(video);
+        
         if (!videoPath) {
-            return res.status(404).json({ error: `File not found: ${video}` });
+             // Try to see if it is a valid URL even if findFilePath didn't catch it
+             if (video.startsWith('http')) videoPath = video;
+             else return res.status(404).json({ error: `File not found: ${video}` });
         }
+
+        // If it is a URL, download it
+        if (videoPath.startsWith('http')) {
+            try {
+                const tempFilename = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+                const tempPath = path.join(uploadDir, tempFilename);
+                console.log(`Downloading external video: ${videoPath}`);
+                await downloadFile(videoPath, tempPath);
+                videoPath = tempPath;
+                tempFiles.push(tempPath);
+            } catch (e) {
+                console.error(`Failed to download ${videoPath}:`, e.message);
+                // Cleanup any already downloaded files
+                tempFiles.forEach(f => fs.unlink(f, () => {}));
+                return res.status(400).json({ error: `Failed to download external video: ${video}` });
+            }
+        }
+
         command.input(videoPath);
     }
 
@@ -619,11 +657,13 @@ app.post('/api/stitch', upload.single('customAudio'), (req, res) => {
         .on('end', () => {
             console.log('Stitching finished');
             if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio file
+            tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
             res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
         .on('error', (err) => {
             console.error('Stitch error:', err);
             if (req.file) fs.unlink(req.file.path, () => {});
+            tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
             res.status(500).json({ error: 'Stitching failed. Ensure all videos have valid streams.' });
         })
         .save(outputPath);
