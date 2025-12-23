@@ -42,6 +42,13 @@
         .btn-delete { background: #dc3545; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
         .btn-delete:hover { background: #c82333; }
         .empty-library { text-align: center; color: #888; padding: 1rem; font-style: italic; }
+
+        /* Tab Styles */
+        .tabs { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 1rem; }
+        .tab-btn { padding: 0.8rem 1.5rem; border: none; background: none; cursor: pointer; font-size: 1rem; color: #666; border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
@@ -59,14 +66,30 @@
         </div>
     </div>
 
-    <!-- Upload Section -->
+    <!-- Upload/Add Section -->
     <div class="card">
-        <div class="section-title">1. Upload New Videos</div>
-        <div class="row">
-            <input type="file" id="fileInput" accept="video/*" multiple>
-            <button onclick="uploadFiles()" style="width: auto; padding: 0 2rem; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Upload</button>
+        <div class="section-title">1. Add Videos</div>
+        
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('upload')">Upload Files</button>
+            <button class="tab-btn" onclick="switchTab('url')">External URL</button>
         </div>
-        <div id="uploadStatus" style="margin-top: 0.5rem; color: #666;"></div>
+
+        <div id="tab-upload" class="tab-content active">
+            <div class="row">
+                <input type="file" id="fileInput" accept="video/*" multiple>
+                <button onclick="uploadFiles()" style="width: auto; padding: 0 2rem; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Upload</button>
+            </div>
+            <div id="uploadStatus" style="margin-top: 0.5rem; color: #666;"></div>
+        </div>
+
+        <div id="tab-url" class="tab-content">
+            <div class="row">
+                <input type="text" id="urlInput" placeholder="https://example.com/video.mp4">
+                <button onclick="addExternalUrl()" style="width: auto; padding: 0 2rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Add URL</button>
+            </div>
+            <small style="color: #666;">Enter a direct link to a video file.</small>
+        </div>
     </div>
 
     <!-- Library Section -->
@@ -202,6 +225,43 @@
     const API_BASE_URL = 'https://video.andre-ia.fr'; 
     
     let videoChoices;
+    let externalUrls = [];
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Find button that triggered this
+        const buttons = document.querySelectorAll('.tab-btn');
+        if (tab === 'upload') buttons[0].classList.add('active');
+        else buttons[1].classList.add('active');
+
+        document.getElementById(`tab-${tab}`).classList.add('active');
+    }
+
+    function addExternalUrl() {
+        const input = document.getElementById('urlInput');
+        const url = input.value.trim();
+        
+        if (!url) return alert('Please enter a URL');
+        if (!url.startsWith('http')) return alert('URL must start with http:// or https://');
+        
+        if (!externalUrls.includes(url)) {
+            externalUrls.push(url);
+            loadVideos(); // Refresh dropdown
+            loadLibrary(); // Refresh list
+            input.value = '';
+            alert('URL added to library!');
+        } else {
+            alert('URL already exists in library');
+        }
+    }
+
+    function removeExternalUrl(url) {
+        externalUrls = externalUrls.filter(u => u !== url);
+        loadVideos();
+        loadLibrary();
+    }
 
     // Initialize Choices.js
     document.addEventListener('DOMContentLoaded', () => {
@@ -238,22 +298,27 @@
         try {
             const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
             
-            if (!res.ok) {
-                const errData = await res.json();
-                console.error('Server Error:', errData);
-                if (res.status === 401) return alert('Unauthorized: Please check your API Key.');
-                return alert(`Server Error (${res.status}): ${errData.error || 'Unknown error'}`);
+            let files = [];
+            if (res.ok) {
+                files = await res.json();
+            } else {
+                if (res.status === 401) console.warn('Unauthorized: Please check your API Key.');
+                else console.warn(`Server Error (${res.status})`);
             }
 
-            const files = await res.json();
-            
-            const choices = files.map(file => ({
+            const serverChoices = files.map(file => ({
                 value: file.filename,
                 label: file.filename + (file.type === 'processed' ? ' (Processed)' : ''),
                 selected: false
             }));
+
+            const urlChoices = externalUrls.map(url => ({
+                value: url,
+                label: url + ' (External URL)',
+                selected: false
+            }));
             
-            videoChoices.setChoices(choices, 'value', 'label', true);
+            videoChoices.setChoices([...serverChoices, ...urlChoices], 'value', 'label', true);
         } catch (e) {
             console.error('Failed to load videos', e);
         }
@@ -262,29 +327,43 @@
     async function loadLibrary() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/videos`, { headers: getHeaders() });
+            let files = [];
             
-            if (!res.ok) {
-                const errData = await res.json();
-                document.getElementById('libraryList').innerHTML = `<li class="empty-library" style="color:red">Error: ${errData.error || res.statusText}</li>`;
-                return;
+            if (res.ok) {
+                files = await res.json();
             }
 
-            const files = await res.json();
             const list = document.getElementById('libraryList');
             list.innerHTML = '';
 
-            if (files.length === 0) {
+            if (files.length === 0 && externalUrls.length === 0) {
                 list.innerHTML = '<li class="empty-library">No files found. Upload some videos!</li>';
                 return;
             }
 
+            // Render External URLs
+            externalUrls.forEach(url => {
+                const li = document.createElement('li');
+                li.className = 'library-item';
+                li.style.background = '#fff8e1'; // Highlight external
+                li.innerHTML = `
+                    <span title="${url}" style="max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${url} <small style="color:#999; font-size:0.8em">(External)</small></span>
+                    <div>
+                        <a href="${url}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
+                        <button class="btn-delete" onclick="removeExternalUrl('${url}')">Remove</button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+
+            // Render Server Files
             files.forEach(file => {
                 const li = document.createElement('li');
                 li.className = 'library-item';
                 li.innerHTML = `
                     <span>${file.filename} <small style="color:#999; font-size:0.8em">(${file.type})</small></span>
                     <div>
-                        <a href="${API_BASE_URL}${file.url}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
+                        <a href="${file.url}" target="_blank" style="margin-right: 10px; color: #4a90e2; text-decoration: none;">Preview</a>
                         <button class="btn-delete" onclick="deleteVideo('${file.filename}')">Delete</button>
                     </div>
                 `;
