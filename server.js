@@ -186,9 +186,10 @@ const downloadFile = async (url, destPath) => {
  *       400:
  *         description: No file uploaded
  */
-app.post('/api/upload', upload.single('video'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    res.json({ filename: req.file.filename, originalName: req.file.originalname });
+app.post('/api/upload', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]), (req, res) => {
+    const file = (req.files && req.files.video) ? req.files.video[0] : ((req.files && req.files.audio) ? req.files.audio[0] : null);
+    if (!file) return res.status(400).json({ error: 'No file uploaded' });
+    res.json({ filename: file.filename, originalName: file.originalname });
 });
 
 // API: List Videos
@@ -589,7 +590,7 @@ app.get('/api/info/:filename', (req, res) => {
  *         description: Stitching failed
  */
 app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
-    let { videos, mute, resolution, resizeMode } = req.body;
+    let { videos, mute, resolution, resizeMode, customAudioUrl } = req.body;
     
     // Parse videos if sent as string (FormData)
     if (typeof videos === 'string') {
@@ -641,17 +642,40 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
         command.input(videoPath);
     }
 
-    // Add custom audio input if present
-    if (req.file) {
-        command.input(req.file.path).inputOptions(['-stream_loop', '1000']);
+    // Add custom audio input if present (file or URL)
+    let audioPath = req.file ? req.file.path : null;
+    
+    if (!audioPath && customAudioUrl) {
+        let resolvedAudioPath = findFilePath(customAudioUrl, req);
+        if (resolvedAudioPath && resolvedAudioPath.startsWith('http')) {
+            try {
+                const tempFilename = `temp-audio-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`;
+                const tempPath = path.join(uploadDir, tempFilename);
+                console.log(`Downloading external audio: ${resolvedAudioPath}`);
+                await downloadFile(resolvedAudioPath, tempPath);
+                audioPath = tempPath;
+                tempFiles.push(tempPath);
+            } catch (e) {
+                console.error(`Failed to download audio ${resolvedAudioPath}:`, e.message);
+                // Cleanup
+                tempFiles.forEach(f => fs.unlink(f, () => {}));
+                return res.status(400).json({ error: `Failed to download external audio: ${customAudioUrl}` });
+            }
+        } else if (resolvedAudioPath) {
+            audioPath = resolvedAudioPath;
+        }
     }
 
-    console.log(`Starting stitch for: ${videos.join(', ')} (Mute: ${mute}, Custom Audio: ${!!req.file})`);
+    if (audioPath) {
+        command.input(audioPath).inputOptions(['-stream_loop', '1000']);
+    }
+
+    console.log(`Starting stitch for: ${videos.join(', ')} (Mute: ${mute}, Custom Audio: ${!!audioPath})`);
 
     // Create complex filter
     const filterComplex = [];
     const inputs = [];
-    let useOriginalAudio = !mute && !req.file;
+    let useOriginalAudio = !mute && !audioPath;
 
     // Check if all videos have audio if we want to use original audio
     if (useOriginalAudio) {
@@ -727,7 +751,7 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
         // Concat video only
         filterComplex.push(`${inputs.join('')}concat=n=${videos.length}:v=1:a=0[v]`);
         
-        if (req.file) {
+        if (audioPath) {
             // Map stitched video [v] and custom audio (last input)
             const audioInputIndex = videos.length;
             command.outputOptions(['-map [v]', `-map ${audioInputIndex}:a`, '-shortest']);
@@ -1123,23 +1147,46 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
  *       500:
  *         description: Processing failed
  */
-app.post('/api/custom', upload.single('customAudio'), (req, res) => {
-    const { filename, format, videoCodec, audioCodec, videoFilters, audioFilters, speed, mute, volume, fadeIn, fadeOut, resolution, resizeMode } = req.body;
+app.post('/api/custom', upload.single('customAudio'), async (req, res) => {
+    const { filename, format, videoCodec, audioCodec, videoFilters, audioFilters, speed, mute, volume, fadeIn, fadeOut, resolution, resizeMode, customAudioUrl } = req.body;
     
     // Check for file in uploads OR processed folder (for chained operations)
     const inputPath = findFilePath(filename, req);
 
     const outputFilename = `custom-${Date.now()}.${format || 'mp4'}`;
     const outputPath = path.join(processedDir, outputFilename);
+    const tempFiles = [];
 
     if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
-    console.log(`Starting custom command for: ${filename} (Audio: ${!!req.file})`);
+    // Handle Custom Audio (URL)
+    let audioPath = req.file ? req.file.path : null;
+    if (!audioPath && customAudioUrl) {
+        let resolvedAudioPath = findFilePath(customAudioUrl, req);
+        if (resolvedAudioPath && resolvedAudioPath.startsWith('http')) {
+            try {
+                const tempFilename = `temp-audio-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`;
+                const tempPath = path.join(uploadDir, tempFilename);
+                console.log(`Downloading external audio: ${resolvedAudioPath}`);
+                await downloadFile(resolvedAudioPath, tempPath);
+                audioPath = tempPath;
+                tempFiles.push(tempPath);
+            } catch (e) {
+                console.error(`Failed to download audio ${resolvedAudioPath}:`, e.message);
+                return res.status(400).json({ error: `Failed to download external audio: ${customAudioUrl}` });
+            }
+        } else if (resolvedAudioPath) {
+            audioPath = resolvedAudioPath;
+        }
+    }
+
+    console.log(`Starting custom command for: ${filename} (Audio: ${!!audioPath})`);
 
     // Get video duration first to ensure audio loops correctly
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
         if (err) {
             console.error('Probe error:', err);
+            tempFiles.forEach(f => fs.unlink(f, () => {}));
             return res.status(500).json({ error: 'Failed to probe video file' });
         }
 
@@ -1177,7 +1224,7 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
                 finalDuration = videoDuration / speedFactor;
                 
                 // Audio Speed (only if not muted AND no custom audio)
-                if (!req.file && !mute && mute !== 'true') {
+                if (!audioPath && !mute && mute !== 'true') {
                     let s = speedFactor;
                     if (s >= 0.5 && s <= 2.0) {
                         aFilters.push(`atempo=${s}`);
@@ -1211,50 +1258,12 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
         }
 
         // Handle Custom Audio
-        if (req.file) {
+        if (audioPath) {
             // Use aloop filter to loop audio indefinitely
             // [1:a] refers to the second input (audio file)
-            command.input(req.file.path);
+            // command.input(audioPath); // We add it later with options
             
-            // We need to use complex filter to loop audio
-            // aloop=loop=-1:size=2e9 loops the audio stream
-            // We map the looped audio to [a]
-            // Note: We must be careful not to conflict with other filters
-            
-            // Instead of complex filter for looping, let's use the duration approach with -stream_loop
-            // But since stream_loop was problematic, let's try the input option again with the explicit duration
-            
-            // Actually, let's use the aloop filter as it is more robust within the filter graph
-            // We need to add it to the complex filter chain
-            
-            // But wait, fluent-ffmpeg handles filters separately.
-            // Let's use the simple input loop option but force the output duration
-            
-            command.inputOptions(['-stream_loop', '-1']); // Apply to the audio input (which is added next? No, fluent-ffmpeg is tricky)
-            
-            // Let's reconstruct:
-            // command is ffmpeg(inputPath) -> Input 0
-            // command.input(req.file.path) -> Input 1
-            // We want stream_loop on Input 1.
-            
-            // Correct way in fluent-ffmpeg for input options on specific input:
-            // ffmpeg().input(input1).input(input2).inputOptions(...) -> applies to input2? No.
-            
-            // Let's use the explicit addInput method with options
-            // But command is already created.
-            
-            // Let's try the filter_complex approach which is unambiguous
-            // We will map [1:a] through aloop
-            
-            // However, mixing simple audioFilters and complexFilter is hard.
-            // Let's stick to the user's request: "take the video length"
-            
-            // We have finalDuration.
-            // We will use -t finalDuration on the output.
-            // And we will use -stream_loop -1 on the audio input.
-            // To ensure stream_loop applies to audio, we use addInputOption BEFORE adding the input?
-            // No, fluent-ffmpeg: .input(file).inputOptions(...)
-            
+            // We will use -stream_loop -1 on the audio input.
         } else {
             // Handle Mute
             if (mute === true || mute === 'true') {
@@ -1270,11 +1279,9 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
         if (aFilters.length > 0) command.audioFilters(aFilters);
 
         // Re-implement Custom Audio logic with correct scoping
-        if (req.file) {
+        if (audioPath) {
              // We need to add the input AND options
-             // Note: command.input() adds a new input.
-             // We want to add the audio file with stream_loop
-             command.addInput(req.file.path);
+             command.addInput(audioPath);
              command.addInputOption('-stream_loop', '-1');
              
              // Map video from 0 and audio from 1
@@ -1289,11 +1296,13 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
             .on('end', () => {
                 console.log('Custom command finished');
                 if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio
+                tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
                 res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`), filename: outputFilename });
             })
             .on('error', (err) => {
                 console.error('Custom command error:', err);
                 if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio
+                tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
                 res.status(500).json({ error: 'Custom command failed: ' + err.message });
             })
             .save(outputPath);

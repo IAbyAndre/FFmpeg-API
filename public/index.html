@@ -68,7 +68,7 @@
 
     <!-- Upload/Add Section -->
     <div class="card">
-        <div class="section-title">1. Add Videos</div>
+        <div class="section-title">1. Add Media (Videos & Audio)</div>
         
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('upload')">Upload Files</button>
@@ -77,7 +77,7 @@
 
         <div id="tab-upload" class="tab-content active">
             <div class="row">
-                <input type="file" id="fileInput" accept="video/*" multiple>
+                <input type="file" id="fileInput" accept="video/*,audio/*" multiple>
                 <button onclick="uploadFiles()" style="width: auto; padding: 0 2rem; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">Upload</button>
             </div>
             <div id="uploadStatus" style="margin-top: 0.5rem; color: #666;"></div>
@@ -85,10 +85,10 @@
 
         <div id="tab-url" class="tab-content">
             <div class="row">
-                <input type="text" id="urlInput" placeholder="https://example.com/video.mp4">
+                <input type="text" id="urlInput" placeholder="https://example.com/media.mp4 or .mp3">
                 <button onclick="addExternalUrl()" style="width: auto; padding: 0 2rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Add URL</button>
             </div>
-            <small style="color: #666;">Enter a direct link to a video file.</small>
+            <small style="color: #666;">Enter a direct link to a video or audio file.</small>
         </div>
     </div>
 
@@ -182,7 +182,13 @@
 
         <div class="form-group">
             <label>Custom Audio Track (Optional)</label>
-            <input type="file" id="settingAudio" accept="audio/*">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <select id="settingAudioUrl" style="flex: 1;">
+                    <option value="">-- Select from Library --</option>
+                </select>
+                <span>OR</span>
+                <input type="file" id="settingAudio" accept="audio/*" style="flex: 1;">
+            </div>
             <small style="color: #666;">Will replace original audio. Loops if shorter than video.</small>
         </div>
 
@@ -319,6 +325,18 @@
             }));
             
             videoChoices.setChoices([...serverChoices, ...urlChoices], 'value', 'label', true);
+
+            // Populate Audio Dropdown
+            const audioSelect = document.getElementById('settingAudioUrl');
+            const currentAudioValue = audioSelect.value;
+            audioSelect.innerHTML = '<option value="">-- Select from Library --</option>';
+            [...serverChoices, ...urlChoices].forEach(choice => {
+                const opt = document.createElement('option');
+                opt.value = choice.value;
+                opt.textContent = choice.label;
+                if (choice.value === currentAudioValue) opt.selected = true;
+                audioSelect.appendChild(opt);
+            });
         } catch (e) {
             console.error('Failed to load videos', e);
         }
@@ -408,7 +426,8 @@
         
         for (let file of input.files) {
             const formData = new FormData();
-            formData.append('video', file);
+            const fieldName = file.type.startsWith('audio/') ? 'audio' : 'video';
+            formData.append(fieldName, file);
             await fetch(`${API_BASE_URL}/api/upload`, { 
                 method: 'POST', 
                 body: formData,
@@ -441,6 +460,7 @@
         const fadeOut = document.getElementById('settingFadeOut').value;
         const resolution = document.getElementById('settingResolution').value;
         const resizeMode = document.getElementById('settingResizeMode').value;
+        const customAudioUrl = document.getElementById('settingAudioUrl').value;
 
         const resultsArea = document.getElementById('resultsArea');
         resultsArea.innerHTML = '<div style="text-align:center; color:#666;">Processing... please wait.</div>';
@@ -448,9 +468,9 @@
         try {
             if (mode === 'stitch') {
                 if (selectedVideos.length < 2) return alert('Stitching requires at least 2 videos.');
-                await runStitchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode });
+                await runStitchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode, customAudioUrl });
             } else {
-                await runBatchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode });
+                await runBatchPipeline(selectedVideos, { speed, format, mute, vFilters, volume, fadeIn, fadeOut, resolution, resizeMode, customAudioUrl });
             }
         } catch (e) {
             resultsArea.innerHTML = `<div style="color:red; text-align:center;">Error: ${e.message}</div>`;
@@ -464,7 +484,8 @@
             videos, 
             mute: false,
             resolution: settings.resolution,
-            resizeMode: settings.resizeMode
+            resizeMode: settings.resizeMode,
+            customAudioUrl: settings.customAudioUrl
         };
         addResultJson(stitchPayload, 'View Request Payload (Stitch)');
         
@@ -509,6 +530,7 @@
         if (settings.fadeOut) formData.append('fadeOut', settings.fadeOut);
         if (settings.resolution) formData.append('resolution', settings.resolution);
         if (settings.resizeMode) formData.append('resizeMode', settings.resizeMode);
+        if (settings.customAudioUrl) formData.append('customAudioUrl', settings.customAudioUrl);
         
         // Add custom audio file if present
         const audioInput = document.getElementById('settingAudio');
