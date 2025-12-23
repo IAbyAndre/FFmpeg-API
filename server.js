@@ -9,6 +9,9 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const axios = require('axios');
+const { pipeline } = require('stream');
+const { promisify } = require('util');
+const streamPipeline = promisify(pipeline);
 require('dotenv').config();
 
 // Set ffmpeg paths
@@ -117,17 +120,20 @@ const getFullUrl = (req, path) => {
 
 // Helper to download external file
 const downloadFile = async (url, destPath) => {
-    const writer = fs.createWriteStream(destPath);
+    console.log(`[Download] Starting download from: ${url}`);
     const response = await axios({
         url,
         method: 'GET',
-        responseType: 'stream'
+        responseType: 'stream',
+        timeout: 60000 // 60 second timeout
     });
-    response.data.pipe(writer);
-    return new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-    });
+    
+    if (response.status !== 200) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+    }
+
+    await streamPipeline(response.data, fs.createWriteStream(destPath));
+    console.log(`[Download] Finished downloading to: ${destPath}`);
 };
 
 // API: Upload Video
@@ -253,9 +259,43 @@ app.get('/api/videos', async (req, res) => {
 });
 
 // Helper to find file in uploads or processed
-const findFilePath = (filename) => {
+const findFilePath = (filename, req) => {
     // Allow external URLs
     if (filename.startsWith('http://') || filename.startsWith('https://')) {
+        // Check if it's a local URL to avoid unnecessary downloads
+        if (req) {
+            try {
+                const host = req.get('host');
+                const forwardedHost = req.headers['x-forwarded-host'];
+                const url = new URL(filename);
+                
+                const isLocal = url.host === host || 
+                                (forwardedHost && url.host === forwardedHost) || 
+                                url.host === 'video.andre-ia.fr' ||
+                                url.host === 'localhost' ||
+                                url.host === '127.0.0.1';
+                
+                if (isLocal) {
+                    const pathname = url.pathname;
+                    console.log(`[Path] Detected local URL: ${filename} -> ${pathname}`);
+                    
+                    let localPath = null;
+                    if (pathname.startsWith('/processed/')) {
+                        localPath = path.join(processedDir, pathname.replace('/processed/', ''));
+                    } else if (pathname.startsWith('/uploads/')) {
+                        localPath = path.join(uploadDir, pathname.replace('/uploads/', ''));
+                    }
+
+                    if (localPath) {
+                        if (fs.existsSync(localPath)) return localPath;
+                        console.error(`[Path] Local file missing: ${localPath}`);
+                        return null; // File is supposed to be local but is missing
+                    }
+                }
+            } catch (e) {
+                console.error(`[Path] Error parsing URL ${filename}:`, e.message);
+            }
+        }
         return filename;
     }
 
@@ -266,6 +306,20 @@ const findFilePath = (filename) => {
     if (fs.existsSync(processedPath)) return processedPath;
     
     return null;
+};
+
+// Helper to check if file has audio
+const hasAudioStream = (filePath) => {
+    return new Promise((resolve) => {
+        ffmpeg.ffprobe(filePath, (err, metadata) => {
+            if (err) {
+                console.error(`[Probe] Error probing ${filePath}:`, err.message);
+                return resolve(false);
+            }
+            const hasAudio = metadata.streams.some(s => s.codec_type === 'audio');
+            resolve(hasAudio);
+        });
+    });
 };
 
 // API: Delete Video
@@ -307,7 +361,7 @@ const findFilePath = (filename) => {
  */
 app.delete('/api/videos/:filename', (req, res) => {
     const filename = req.params.filename;
-    const filePath = findFilePath(filename);
+    const filePath = findFilePath(filename, req);
 
     if (!filePath) {
         return res.status(404).json({ error: 'File not found' });
@@ -377,7 +431,7 @@ app.delete('/api/videos/:filename', (req, res) => {
  */
 app.post('/api/convert', (req, res) => {
     const { filename, format } = req.body;
-    const inputPath = findFilePath(filename);
+    const inputPath = findFilePath(filename, req);
     const outputFilename = `converted-${Date.now()}.${format}`;
     const outputPath = path.join(processedDir, outputFilename);
 
@@ -434,7 +488,7 @@ app.post('/api/convert', (req, res) => {
  *         description: Server error
  */
 app.get('/api/info/:filename', (req, res) => {
-    const inputPath = findFilePath(req.params.filename);
+    const inputPath = findFilePath(req.params.filename, req);
     if (!inputPath) return res.status(404).json({ error: 'File not found' });
 
     ffmpeg.ffprobe(inputPath, (err, metadata) => {
@@ -554,10 +608,11 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
     const outputPath = path.join(processedDir, outputFilename);
     const command = ffmpeg();
     const tempFiles = []; // Track for cleanup
+    const resolvedPaths = [];
 
     // Validate and add video inputs
     for (const video of videos) {
-        let videoPath = findFilePath(video);
+        let videoPath = findFilePath(video, req);
         
         if (!videoPath) {
              // Try to see if it is a valid URL even if findFilePath didn't catch it
@@ -582,6 +637,7 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
             }
         }
 
+        resolvedPaths.push(videoPath);
         command.input(videoPath);
     }
 
@@ -595,7 +651,19 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
     // Create complex filter
     const filterComplex = [];
     const inputs = [];
-    const useOriginalAudio = !mute && !req.file;
+    let useOriginalAudio = !mute && !req.file;
+
+    // Check if all videos have audio if we want to use original audio
+    if (useOriginalAudio) {
+        for (const vPath of resolvedPaths) {
+            const hasAudio = await hasAudioStream(vPath);
+            if (!hasAudio) {
+                console.warn(`[Stitch] Video ${vPath} lacks audio stream. Falling back to muted stitch to prevent failure.`);
+                useOriginalAudio = false;
+                break;
+            }
+        }
+    }
     
     // Determine resolution and scaling logic
     let targetW = 1280;
@@ -606,6 +674,21 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
         if (parts.length === 2) {
             targetW = parseInt(parts[0]);
             targetH = parseInt(parts[1]);
+        }
+    } else if (resolvedPaths.length > 0) {
+        // Use first video's resolution as target if "original" is selected
+        try {
+            const metadata = await new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(resolvedPaths[0], (err, meta) => err ? reject(err) : resolve(meta));
+            });
+            const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+            if (videoStream) {
+                targetW = videoStream.width;
+                targetH = videoStream.height;
+                console.log(`[Stitch] Using original resolution from first video: ${targetW}x${targetH}`);
+            }
+        } catch (e) {
+            console.warn('[Stitch] Failed to probe first video resolution, falling back to 1280x720');
         }
     }
 
@@ -628,7 +711,9 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
         filterComplex.push(`[${index}:v]${scaleFilter}[v${index}]`);
         
         if (useOriginalAudio) {
-            inputs.push(`[v${index}][${index}:a]`);
+            // Normalize audio: resample to 44100Hz, stereo
+            filterComplex.push(`[${index}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a${index}]`);
+            inputs.push(`[v${index}][a${index}]`);
         } else {
             inputs.push(`[v${index}]`);
         }
@@ -654,17 +739,25 @@ app.post('/api/stitch', upload.single('customAudio'), async (req, res) => {
 
     command
         .complexFilter(filterComplex)
+        .on('start', (cmdLine) => {
+            console.log('[Stitch] FFmpeg command:', cmdLine);
+        })
         .on('end', () => {
             console.log('Stitching finished');
             if (req.file) fs.unlink(req.file.path, () => {}); // Cleanup audio file
             tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
             res.json({ success: true, url: getFullUrl(req, `/processed/${outputFilename}`) });
         })
-        .on('error', (err) => {
+        .on('error', (err, stdout, stderr) => {
             console.error('Stitch error:', err);
+            console.error('FFmpeg stderr:', stderr);
             if (req.file) fs.unlink(req.file.path, () => {});
             tempFiles.forEach(f => fs.unlink(f, () => {})); // Cleanup temp downloads
-            res.status(500).json({ error: 'Stitching failed. Ensure all videos have valid streams.' });
+            res.status(500).json({ 
+                error: 'Stitching failed. Ensure all videos have valid streams.',
+                details: err.message,
+                ffmpegStderr: stderr 
+            });
         })
         .save(outputPath);
 });
@@ -730,7 +823,7 @@ app.post('/api/speed', (req, res) => {
         return res.status(400).json({ error: 'Speed must be between 0.1 and 10' });
     }
 
-    const inputPath = findFilePath(filename);
+    const inputPath = findFilePath(filename, req);
     const outputFilename = `speed-${speedFactor}x-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
 
@@ -827,7 +920,7 @@ app.post('/api/speed', (req, res) => {
  */
 app.post('/api/mute', (req, res) => {
     const { filename } = req.body;
-    const inputPath = findFilePath(filename);
+    const inputPath = findFilePath(filename, req);
     const outputFilename = `muted-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
 
@@ -907,7 +1000,7 @@ app.post('/api/add-audio', upload.single('audio'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
     if (!videoFilename) return res.status(400).json({ error: 'No video filename provided' });
 
-    const videoPath = findFilePath(videoFilename);
+    const videoPath = findFilePath(videoFilename, req);
     const audioPath = req.file.path;
     const outputFilename = `custom-audio-${Date.now()}.mp4`;
     const outputPath = path.join(processedDir, outputFilename);
@@ -1034,7 +1127,7 @@ app.post('/api/custom', upload.single('customAudio'), (req, res) => {
     const { filename, format, videoCodec, audioCodec, videoFilters, audioFilters, speed, mute, volume, fadeIn, fadeOut, resolution, resizeMode } = req.body;
     
     // Check for file in uploads OR processed folder (for chained operations)
-    const inputPath = findFilePath(filename);
+    const inputPath = findFilePath(filename, req);
 
     const outputFilename = `custom-${Date.now()}.${format || 'mp4'}`;
     const outputPath = path.join(processedDir, outputFilename);
