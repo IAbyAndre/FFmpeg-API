@@ -238,6 +238,11 @@ app.get('/api/videos', async (req, res) => {
 
 // Helper to find file in uploads or processed
 const findFilePath = (filename) => {
+    // Allow external URLs
+    if (filename.startsWith('http://') || filename.startsWith('https://')) {
+        return filename;
+    }
+
     const uploadPath = path.join(uploadDir, filename);
     if (fs.existsSync(uploadPath)) return uploadPath;
     
@@ -290,6 +295,11 @@ app.delete('/api/videos/:filename', (req, res) => {
 
     if (!filePath) {
         return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Prevent deleting external URLs
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        return res.status(400).json({ error: 'Cannot delete external URLs' });
     }
 
     fs.unlink(filePath, (err) => {
