@@ -181,7 +181,9 @@ const downloadFile = async (url, destPath) => {
  *               properties:
  *                 filename:
  *                   type: string
- *                 originalName:
+ *                 type:
+ *                   type: string
+ *                 url:
  *                   type: string
  *       400:
  *         description: No file uploaded
@@ -189,7 +191,11 @@ const downloadFile = async (url, destPath) => {
 app.post('/api/upload', upload.any(), (req, res) => {
     const file = (req.files && req.files.length > 0) ? req.files[0] : null;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
-    res.json({ filename: file.filename, originalName: file.originalname });
+    res.json({ 
+        filename: file.filename, 
+        type: 'upload',
+        url: getFullUrl(req, `/uploads/${file.filename}`)
+    });
 });
 
 // API: List Videos
