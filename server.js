@@ -9,6 +9,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const axios = require('axios');
+const { exec } = require('child_process');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const streamPipeline = promisify(pipeline);
@@ -422,6 +423,103 @@ app.delete('/api/videos/:filename', (req, res) => {
     fs.unlink(filePath, (err) => {
         if (err) return res.status(500).json({ error: 'Failed to delete file' });
         res.json({ success: true, message: 'File deleted successfully' });
+    });
+});
+
+// API: Raw FFmpeg Command
+/**
+ * @swagger
+ * /api/ffmpeg-raw:
+ *   post:
+ *     summary: Execute an arbitrary FFmpeg command
+ *     description: |
+ *       Execute any FFmpeg command. The last argument (output filename) will be automatically 
+ *       redirected to the processed folder.
+ *       
+ *       ### Example
+ *       ```json
+ *       {
+ *         "command": "ffmpeg -i https://example.com/v.mp4 -i https://example.com/a.mp3 -map 0:v -map 1:a -shortest -c:v copy -c:a aac output.mp4"
+ *       }
+ *       ```
+ *     tags: [Processing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               command:
+ *                 type: string
+ *                 example: "ffmpeg -i https://storage.rendi.dev/sample/big_buck_bunny_720p_16sec.mp4 -i https://storage.rendi.dev/sample/Neon_Lights_5sec.mp3 -map 0:v -map 1:a -shortest -c:v copy -c:a aac output_replace_audio.mp4"
+ *     responses:
+ *       200:
+ *         description: Command executed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 filename:
+ *                   type: string
+ *                 url:
+ *                   type: string
+ *       400:
+ *         description: Invalid command
+ *       500:
+ *         description: FFmpeg execution failed
+ */
+app.post('/api/ffmpeg-raw', (req, res) => {
+    const { command } = req.body;
+    
+    if (!command || !command.trim().startsWith('ffmpeg')) {
+        return res.status(400).json({ error: 'Invalid command. Must start with "ffmpeg"' });
+    }
+
+    // Extract the intended output filename or use a default
+    const parts = command.trim().split(/\s+/);
+    const lastPart = parts[parts.length - 1];
+    
+    // If the last part is an option (starts with -), we might need to append an output filename
+    // but usually users provide an output filename.
+    let originalOutputName = lastPart;
+    if (lastPart.startsWith('-')) {
+        originalOutputName = 'output.mp4';
+        parts.push(originalOutputName);
+    }
+
+    const extension = path.extname(originalOutputName) || '.mp4';
+    const outputFilename = `raw-${Date.now()}${extension}`;
+    const outputPath = path.join(processedDir, outputFilename);
+
+    // Replace the last part with the absolute path to our processed directory
+    parts[parts.length - 1] = `"${outputPath}"`;
+    
+    // Reconstruct command, ensuring we use the full path to ffmpeg if needed
+    // but since we have ffmpeg-static, we should use that path.
+    parts[0] = `"${ffmpegPath}"`;
+    const finalCommand = parts.join(' ');
+
+    console.log(`[Raw FFmpeg] Executing: ${finalCommand}`);
+
+    exec(finalCommand, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`[Raw FFmpeg] Error: ${stderr}`);
+            return res.status(500).json({ 
+                error: 'FFmpeg execution failed', 
+                details: stderr,
+                command: finalCommand 
+            });
+        }
+        
+        res.json({
+            success: true,
+            filename: outputFilename,
+            url: getFullUrl(req, `/processed/${outputFilename}`)
+        });
     });
 });
 
